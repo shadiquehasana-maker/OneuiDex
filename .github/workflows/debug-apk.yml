@@ -17,7 +17,7 @@ jobs:
   build:
     name: Analyze, test, and build
     # Gradle needs several GB: Android jobs share one runner so they never run side by side.
-    runs-on: [self-hosted, android]
+    runs-on: runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
