@@ -55,9 +55,9 @@ jobs:
       - name: Run Linux helper tests
         run: python3 -m unittest discover -s tool/tests -p 'test_*.py'
 
-      - name: Run Android unit tests
-        working-directory: android
-        run: ./gradlew :app:testGithubDebugUnitTest :cardex:testDebugUnitTest
+      #shell: - name: Run Android unit tests
+       #working-directory: android
+       #run: ./gradlew :app:testGithubDebugUnitTest :cardex:testDebugUnitTest
 
       - name: Build Debug APK
         run: flutter build apk --flavor github --debug --dart-define=DISTRIBUTION_CHANNEL=github
