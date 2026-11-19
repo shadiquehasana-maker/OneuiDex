@@ -58,9 +58,30 @@ internal class PhysicalInputRouter(
 
     fun routeConnectedDevices(display: Display, mouse: Boolean = true, keyboard: Boolean = true): Int {
         clearStaleAssociations()
-        val uniqueId = displayUniqueId(display) ?: return 0
+        OperationLog.i(
+            context,
+            "InputRouting",
+            "routeConnectedDevices display=${display.displayId} mouse=$mouse keyboard=$keyboard"
+        )
+        logInventory()
+        val uniqueId = displayUniqueId(display)
+        if (uniqueId == null) {
+            OperationLog.w(
+                context,
+                "InputRouting",
+                "display unique id unavailable display=${display.displayId}",
+                null
+            )
+            return 0
+        }
         routedDisplayUniqueId = uniqueId
-        eligibleDevices(mouse, keyboard).forEach { device -> route(device, uniqueId) }
+        val devices = eligibleDevices(mouse, keyboard)
+        OperationLog.i(
+            context,
+            "InputRouting",
+            "eligible devices=${devices.size} target=$uniqueId"
+        )
+        devices.forEach { device -> route(device, uniqueId) }
         persist()
         return routedKeys.size
     }
@@ -143,6 +164,18 @@ internal class PhysicalInputRouter(
         preferences.edit().clear().commit()
     }
 
+    private fun logInventory() {
+        InputDevice.getDeviceIds().toList().mapNotNull(InputDevice::getDevice).forEach { d ->
+            OperationLog.i(
+                context,
+                "InputRouting",
+                "device id=${d.id} name=${d.name} external=${d.isExternal} " +
+                    "sources=0x${d.sources.toString(16)} kbType=${d.keyboardType} " +
+                    "descriptorBlank=${d.descriptor.isBlank()}"
+            )
+        }
+    }
+
     private fun eligibleDevices(mouse: Boolean, keyboard: Boolean): List<InputDevice> = InputDevice.getDeviceIds().toList().mapNotNull(InputDevice::getDevice)
         .filter { device ->
             device.id >= 0 && device.isExternal && device.descriptor.isNotBlank() &&
@@ -161,6 +194,8 @@ internal class PhysicalInputRouter(
 
     private fun displayUniqueId(display: Display): String? = runCatching {
         Display::class.java.getMethod("getUniqueId").invoke(display) as? String
+    }.onFailure {
+        OperationLog.w(context, "InputRouting", "Display.getUniqueId failed", it)
     }.getOrNull()?.takeIf { it.isNotBlank() }
 
     private fun route(device: InputDevice, displayUniqueId: String) {
@@ -176,7 +211,16 @@ internal class PhysicalInputRouter(
     private fun associate(device: InputDevice, displayUniqueId: String): Boolean {
         val descriptor = device.descriptor.takeIf { it.isNotBlank() } ?: return false
         val operation = methods.associateByDescriptor ?: run {
-            OperationLog.w(context, "InputRouting", "descriptor association API unavailable", null)
+            val found = (service.javaClass.interfaces.flatMap { it.methods.asIterable() } + service.javaClass.methods)
+                .map { it.name }
+                .filter { it.contains("Association") }
+                .distinct()
+            OperationLog.w(
+                context,
+                "InputRouting",
+                "descriptor association API unavailable; found=$found",
+                null
+            )
             return false
         }
         return runCatching {
